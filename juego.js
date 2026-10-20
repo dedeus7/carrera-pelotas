@@ -59,6 +59,31 @@
   }
   try { $('input-nombre').value = localStorage.getItem('carrera-nombre') || ''; } catch (e) {}
 
+  // ---------- Etiqueta única (#1234), al estilo Discord ----------
+  // Cada navegador guarda su número; el anfitrión lo cambia si coincide con otro.
+  function tagAleatorio() { return 1000 + Math.floor(Math.random() * 9000); }
+  function tagValido(t) { t = Number(t); return Number.isInteger(t) && t >= 1000 && t <= 9999 ? t : 0; }
+  function leerTag() {
+    let t = 0;
+    try { t = tagValido(localStorage.getItem('carrera-tag')); } catch (e) {}
+    if (!t) {
+      t = tagAleatorio();
+      try { localStorage.setItem('carrera-tag', String(t)); } catch (e) {}
+    }
+    return t;
+  }
+  const mismoNombre = (a, b) => a.trim().toLowerCase() === b.trim().toLowerCase();
+
+  // En la partida, el número solo se enseña si hay nombres repetidos
+  function calcularNombres(lista) {
+    const res = {};
+    for (const j of lista) {
+      const repetido = lista.some(o => o !== j && mismoNombre(o.nombre, j.nombre));
+      res[j.slot] = repetido ? `${j.nombre}#${j.tag}` : j.nombre;
+    }
+    return res;
+  }
+
   function reiniciarTodo() {
     mundo = null; sala.clear(); colasEntradas = {}; nombres = {}; miSlot = -1;
     instantaneas = []; ultima = null; pred = null; pendientes = []; secuencia = 0;
@@ -83,7 +108,7 @@
       const codigo = await Red.crear_sala();
       reiniciarTodo();
       miSlot = 0;
-      sala.set('yo', { slot: 0, nombre });
+      sala.set('yo', { slot: 0, nombre, tag: leerTag() });
       $('codigo-sala').textContent = codigo;
       mensajeMenu('');
       mostrar('sala');
@@ -104,7 +129,7 @@
     try {
       await Red.unirse(codigo);
       reiniciarTodo();
-      Red.enviar_al_anfitrion({ t: 'hola', nombre });
+      Red.enviar_al_anfitrion({ t: 'hola', nombre, tag: leerTag() });
       $('codigo-sala').textContent = codigo;
       pintarSala([]);
       mensajeMenu('');
@@ -148,6 +173,12 @@
       li.appendChild(bola);
       if (j) {
         li.appendChild(document.createTextNode(j.nombre));
+        if (j.tag) {
+          const tag = document.createElement('span');
+          tag.textContent = '#' + j.tag;
+          tag.style.cssText = 'color:#9aa3b2;font-weight:500;margin-left:-6px';
+          li.appendChild(tag);
+        }
         const et = document.createElement('span');
         et.className = 'etiqueta';
         et.textContent = (s === 0 ? 'anfitrión' : '') + (s === miSlot ? (s === 0 ? ' · tú' : 'tú') : '');
@@ -172,7 +203,7 @@
     mundo = R.crearMundo(lista.map(j => j.slot));
     colasEntradas = {};
     nombres = {};
-    for (const j of lista) nombres[j.slot] = j.nombre;
+    nombres = calcularNombres(lista);
     Red.enviar_a_todos({ t: 'empieza', jugadores: lista, colores: mundo.pelotas.map(p => p.color) });
     entrarEnJuego();
   };
@@ -226,8 +257,11 @@
       for (let s = 0; s < R.MAX_JUGADORES; s++) if (!ocupados.has(s)) { libre = s; break; }
       if (libre < 0) { Red.enviar_a(de, { t: 'error', msg: 'La partida está llena (máximo 3).' }); return; }
       const nombre = String(d.nombre || 'Jugador').slice(0, 12);
-      sala.set(de, { slot: libre, nombre });
-      Red.enviar_a(de, { t: 'bienvenida', slot: libre });
+      // Si ya hay alguien con el mismo nombre Y el mismo número, le damos otro número
+      let tag = tagValido(d.tag) || tagAleatorio();
+      while (listaSala().some(j => mismoNombre(j.nombre, nombre) && j.tag === tag)) tag = tagAleatorio();
+      sala.set(de, { slot: libre, nombre, tag });
+      Red.enviar_a(de, { t: 'bienvenida', slot: libre, tag });
       enviarSala();
     } else if (d.t === 'in') {
       const j = sala.get(de);
@@ -244,7 +278,7 @@
       case 'aviso': avisar(d.msg); break;
       case 'empieza':
         nombres = {};
-        for (const j of d.jugadores) nombres[j.slot] = j.nombre;
+        nombres = calcularNombres(d.jugadores);
         coloresPelotas = d.colores;
         instantaneas = []; ultima = null; pred = null; pendientes = [];
         desvio.x = desvio.y = 0;
