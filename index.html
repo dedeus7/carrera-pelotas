@@ -1,0 +1,115 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Carrera de Pelotas</title>
+<style>
+  * { box-sizing: border-box; }
+  html, body { margin: 0; height: 100%; background: #1c2230; color: #fff;
+    font-family: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif; overflow: hidden; }
+
+  .pantalla { display: none; position: fixed; inset: 0; align-items: center; justify-content: center; padding: 16px; }
+  .pantalla.visible { display: flex; }
+
+  .tarjeta { background: #fff; color: #1c2230; border-radius: 18px; padding: 28px;
+    width: min(420px, 100%); box-shadow: 0 20px 60px rgba(0,0,0,.4); }
+  h1 { margin: 0 0 4px; font-size: 28px; }
+  .sub { margin: 0 0 22px; color: #5b6475; font-size: 15px; }
+  label { display: block; font-size: 13px; font-weight: 600; color: #5b6475; margin: 14px 0 6px; }
+  input { width: 100%; font-size: 17px; padding: 11px 12px; border: 2px solid #d9dee8; border-radius: 10px; outline: none; }
+  input:focus { border-color: #2f6fe0; }
+  #input-codigo { text-transform: uppercase; letter-spacing: 6px; font-weight: 700; text-align: center; }
+  button { font: inherit; font-size: 16px; font-weight: 700; border: 0; border-radius: 10px;
+    padding: 12px 16px; cursor: pointer; background: #2f6fe0; color: #fff; width: 100%; margin-top: 12px; }
+  button:hover { filter: brightness(1.08); }
+  button:disabled { opacity: .5; cursor: default; filter: none; }
+  button.secundario { background: #e8ecf3; color: #1c2230; }
+  .separador { text-align: center; color: #9aa3b2; font-size: 13px; margin: 18px 0 2px; }
+  .mensaje { min-height: 22px; margin-top: 14px; color: #c62d22; font-size: 14px; font-weight: 600; }
+  .mensaje.ok { color: #5b6475; }
+
+  .codigo { font-size: 44px; font-weight: 800; letter-spacing: 10px; text-align: center;
+    background: #f1f4f9; border-radius: 12px; padding: 10px; margin: 6px 0 4px; cursor: pointer; user-select: all; }
+  .pista { text-align: center; font-size: 13px; color: #5b6475; }
+  ul.jugadores { list-style: none; padding: 0; margin: 18px 0 0; }
+  ul.jugadores li { display: flex; align-items: center; gap: 10px; padding: 10px 12px; border-radius: 10px;
+    background: #f1f4f9; margin-bottom: 8px; font-weight: 600; }
+  ul.jugadores li.vacio { color: #9aa3b2; font-weight: 400; background: #f7f9fc; }
+  .bola { width: 18px; height: 18px; border-radius: 50%; flex: none; }
+  .etiqueta { margin-left: auto; font-size: 12px; font-weight: 600; color: #5b6475; }
+
+  #pantalla-juego { padding: 0; }
+  #lienzo { position: absolute; inset: 0; width: 100%; height: 100%; display: block; }
+  #btn-salir-juego { position: absolute; top: 10px; right: 10px; width: auto; margin: 0; padding: 8px 14px;
+    font-size: 14px; background: rgba(255,255,255,.15); }
+  #ayuda { position: absolute; bottom: 8px; left: 0; right: 0; text-align: center; font-size: 13px;
+    color: rgba(255,255,255,.7); pointer-events: none; }
+  #panel-fin { position: absolute; inset: 0; display: none; align-items: center; justify-content: center;
+    background: rgba(10,14,24,.55); }
+  #panel-fin .tarjeta { text-align: center; }
+  #texto-fin { font-size: 30px; font-weight: 800; margin: 0 0 6px; }
+  #avisos { position: absolute; top: 64px; left: 50%; transform: translateX(-50%); display: flex;
+    flex-direction: column; gap: 6px; align-items: center; pointer-events: none; }
+  .aviso { background: rgba(0,0,0,.75); padding: 8px 14px; border-radius: 8px; font-size: 14px; }
+</style>
+<!-- PeerJS (WebRTC sencillo). Solo lo usa red.js -->
+<script src="https://unpkg.com/peerjs@1.5.4/dist/peerjs.min.js"></script>
+<script src="red.js"></script>
+<script src="reglas.js"></script>
+</head>
+<body>
+
+<!-- ============ MENÚ ============ -->
+<div id="pantalla-menu" class="pantalla visible">
+  <div class="tarjeta">
+    <h1>Carrera de Pelotas</h1>
+    <p class="sub">Recoge las pelotas de tu color y mételas en tu cubo antes que nadie.</p>
+
+    <label for="input-nombre">Tu nombre</label>
+    <input id="input-nombre" maxlength="12" placeholder="Jugador" autocomplete="off">
+
+    <button id="btn-crear">Crear partida</button>
+
+    <div class="separador">— o únete a la de un amigo —</div>
+    <label for="input-codigo">Código de la partida</label>
+    <input id="input-codigo" maxlength="4" placeholder="ABCD" autocomplete="off">
+    <button id="btn-unirse" class="secundario">Unirse</button>
+
+    <div id="mensaje-menu" class="mensaje"></div>
+  </div>
+</div>
+
+<!-- ============ SALA DE ESPERA ============ -->
+<div id="pantalla-sala" class="pantalla">
+  <div class="tarjeta">
+    <h1>Sala de espera</h1>
+    <p class="sub" style="margin-bottom:10px">Código de la partida:</p>
+    <div id="codigo-sala" class="codigo" title="Pulsa para copiar">----</div>
+    <div id="pista-codigo" class="pista">Pásaselo a tus amigos (pulsa para copiar)</div>
+    <ul id="lista-jugadores" class="jugadores"></ul>
+    <button id="btn-empezar">¡Empezar!</button>
+    <div id="esperando" class="pista" style="margin-top:14px">Esperando a que el anfitrión empiece…</div>
+    <button id="btn-salir-sala" class="secundario">Salir</button>
+  </div>
+</div>
+
+<!-- ============ JUEGO ============ -->
+<div id="pantalla-juego" class="pantalla">
+  <canvas id="lienzo"></canvas>
+  <button id="btn-salir-juego">Salir</button>
+  <div id="ayuda">WASD o flechas: moverse · Espacio: lanzar la pelota que llevas</div>
+  <div id="avisos"></div>
+  <div id="panel-fin">
+    <div class="tarjeta">
+      <p id="texto-fin">¡Gana …!</p>
+      <p id="subtexto-fin" class="sub"></p>
+      <button id="btn-otra">Otra carrera</button>
+      <div id="esperando-fin" class="pista">Esperando al anfitrión…</div>
+    </div>
+  </div>
+</div>
+
+<script src="juego.js"></script>
+</body>
+</html>
