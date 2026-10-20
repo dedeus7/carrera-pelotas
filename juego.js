@@ -296,12 +296,77 @@
   addEventListener('keyup', (e) => teclas.delete(e.code));
   addEventListener('blur', () => teclas.clear());
 
+  // ---------- Controles táctiles ----------
+  // Joystick "flotante": aparece donde pones el dedo en la mitad izquierda.
+  // La dirección se redondea a 8 direcciones (-1, 0, 1) para que el movimiento
+  // sea exactamente igual que con teclado (y la predicción siga cuadrando).
+  const esTactil = window.matchMedia('(pointer: coarse)').matches || navigator.maxTouchPoints > 0;
+  if (esTactil) document.body.classList.add('tactil');
+
+  const RADIO_JOY = 50;     // px que puede alejarse el pomo del centro
+  const ZONA_MUERTA = 12;   // px: menos que esto = quieto
+  const joy = { id: null, cx: 0, cy: 0, x: 0, y: 0 };
+  const zonaJoy = $('zona-joystick'), joyBase = $('joy-base'), joyPomo = $('joy-pomo');
+
+  function colocar(el, x, y) { el.style.left = x + 'px'; el.style.top = y + 'px'; }
+  function posEnZona(e) {
+    const r = zonaJoy.getBoundingClientRect();
+    return { x: e.clientX - r.left, y: e.clientY - r.top };
+  }
+
+  zonaJoy.addEventListener('pointerdown', (e) => {
+    if (joy.id !== null) return;
+    e.preventDefault();
+    joy.id = e.pointerId;
+    try { zonaJoy.setPointerCapture(e.pointerId); } catch (err) {}
+    const p = posEnZona(e);
+    joy.cx = p.x; joy.cy = p.y; joy.x = joy.y = 0;
+    colocar(joyBase, p.x, p.y); colocar(joyPomo, p.x, p.y);
+    joyBase.style.display = joyPomo.style.display = 'block';
+  });
+
+  zonaJoy.addEventListener('pointermove', (e) => {
+    if (e.pointerId !== joy.id) return;
+    e.preventDefault();
+    const p = posEnZona(e);
+    let dx = p.x - joy.cx, dy = p.y - joy.cy;
+    const d = Math.hypot(dx, dy);
+    if (d > RADIO_JOY) { dx = dx / d * RADIO_JOY; dy = dy / d * RADIO_JOY; }
+    colocar(joyPomo, joy.cx + dx, joy.cy + dy);
+    if (d < ZONA_MUERTA) { joy.x = joy.y = 0; return; }
+    // sin(22,5°) ≈ 0,38: por debajo de eso, ese eje cuenta como 0
+    joy.x = Math.abs(dx) / d > 0.38 ? Math.sign(dx) : 0;
+    joy.y = Math.abs(dy) / d > 0.38 ? Math.sign(dy) : 0;
+  });
+
+  function soltarJoystick(e) {
+    if (e.pointerId !== joy.id) return;
+    joy.id = null; joy.x = joy.y = 0;
+    joyBase.style.display = joyPomo.style.display = 'none';
+  }
+  zonaJoy.addEventListener('pointerup', soltarJoystick);
+  zonaJoy.addEventListener('pointercancel', soltarJoystick);
+
+  const btnLanzar = $('btn-lanzar');
+  btnLanzar.addEventListener('pointerdown', (e) => {
+    e.preventDefault();
+    lanzarPulsado = true;
+    btnLanzar.classList.add('pulsado');
+    if (navigator.vibrate) { try { navigator.vibrate(15); } catch (err) {} }
+  });
+  for (const ev of ['pointerup', 'pointercancel', 'pointerleave']) {
+    btnLanzar.addEventListener(ev, () => btnLanzar.classList.remove('pulsado'));
+  }
+  // Evita el menú de "mantener pulsado" del móvil durante la partida
+  $('pantalla-juego').addEventListener('contextmenu', (e) => e.preventDefault());
+
   function leerEntrada() {
     let x = 0, y = 0;
     if (teclas.has('KeyA') || teclas.has('ArrowLeft')) x -= 1;
     if (teclas.has('KeyD') || teclas.has('ArrowRight')) x += 1;
     if (teclas.has('KeyW') || teclas.has('ArrowUp')) y -= 1;
     if (teclas.has('KeyS') || teclas.has('ArrowDown')) y += 1;
+    if (x === 0 && y === 0) { x = joy.x; y = joy.y; }   // si no hay teclas, manda el joystick
     const l = lanzarPulsado;
     lanzarPulsado = false;
     return { x, y, l };

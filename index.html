@@ -2,14 +2,22 @@
 <html lang="es">
 <head>
 <meta charset="utf-8">
-<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
 <title>Carrera de Pelotas</title>
 <style>
   * { box-sizing: border-box; }
   html, body { margin: 0; height: 100%; background: #1c2230; color: #fff;
     font-family: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif; overflow: hidden; }
 
-  .pantalla { display: none; position: fixed; inset: 0; align-items: center; justify-content: center; padding: 16px; }
+  /* overflow + margin:auto: centrado, pero si no cabe (móvil en horizontal) se puede hacer scroll */
+  .pantalla { display: none; position: fixed; inset: 0; padding: 16px; overflow-y: auto; }
+  .pantalla > .tarjeta { margin: auto; }
+  @media (max-height: 520px) {
+    .tarjeta { padding: 18px 22px; }
+    h1 { font-size: 22px; }
+    .sub { margin-bottom: 10px; }
+    .codigo { font-size: 32px; padding: 4px; }
+  }
   .pantalla.visible { display: flex; }
 
   .tarjeta { background: #fff; color: #1c2230; border-radius: 18px; padding: 28px;
@@ -52,6 +60,27 @@
   #avisos { position: absolute; top: 64px; left: 50%; transform: translateX(-50%); display: flex;
     flex-direction: column; gap: 6px; align-items: center; pointer-events: none; }
   .aviso { background: rgba(0,0,0,.75); padding: 8px 14px; border-radius: 8px; font-size: 14px; }
+
+  /* ---------- Controles táctiles (solo en móvil/tablet: clase "tactil" en <body>) ---------- */
+  #pantalla-juego { -webkit-user-select: none; user-select: none; -webkit-touch-callout: none; }
+  #controles-tactiles { display: none; }
+  body.tactil #controles-tactiles { display: block; }
+  body.tactil #ayuda { display: none; }
+  body.tactil #pantalla-juego { touch-action: none; }
+  #zona-joystick { position: absolute; left: 0; top: 50px; bottom: 0; width: 55%; touch-action: none; }
+  #joy-base, #joy-pomo { position: absolute; border-radius: 50%; pointer-events: none; display: none;
+    transform: translate(-50%, -50%); }
+  #joy-base { width: 120px; height: 120px; background: rgba(255,255,255,.14); border: 3px solid rgba(255,255,255,.45); }
+  #joy-pomo { width: 56px; height: 56px; background: rgba(255,255,255,.75); box-shadow: 0 2px 8px rgba(0,0,0,.35); }
+  #btn-lanzar { position: absolute; right: 24px; bottom: 28px; width: 96px; height: 96px; margin: 0; padding: 0;
+    border-radius: 50%; font-size: 15px; font-weight: 800; background: rgba(255,255,255,.22);
+    border: 3px solid rgba(255,255,255,.6); color: #fff; touch-action: none; }
+  #btn-lanzar.pulsado { background: rgba(255,255,255,.5); }
+  #gira { display: none; position: absolute; inset: 0; z-index: 10; background: #1c2230; color: #fff;
+    flex-direction: column; align-items: center; justify-content: center; text-align: center; padding: 24px;
+    font-size: 20px; font-weight: 700; gap: 14px; }
+  #gira .icono { font-size: 56px; }
+  @media (orientation: portrait) { body.tactil #gira { display: flex; } }
 </style>
 <!-- PeerJS (WebRTC sencillo). Solo lo usa red.js -->
 <script src="https://unpkg.com/peerjs@1.5.4/dist/peerjs.min.js"></script>
@@ -99,7 +128,12 @@
   <canvas id="lienzo"></canvas>
   <button id="btn-salir-juego">Salir</button>
   <div id="ayuda">WASD o flechas: moverse · Espacio: lanzar la pelota que llevas</div>
+  <div id="controles-tactiles">
+    <div id="zona-joystick"><div id="joy-base"></div><div id="joy-pomo"></div></div>
+    <button id="btn-lanzar">LANZAR</button>
+  </div>
   <div id="avisos"></div>
+  <div id="gira"><div class="icono">📱↻</div>Gira el móvil para jugar en horizontal</div>
   <div id="panel-fin">
     <div class="tarjeta">
       <p id="texto-fin">¡Gana …!</p>
